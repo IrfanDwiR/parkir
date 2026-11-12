@@ -46,6 +46,7 @@ select:focus-visible {
 
 .login-card {
   width: min(420px, calc(100% - 48px));
+  animation: soft-enter 300ms ease-out both;
 }
 
 .login-subtitle {
@@ -85,6 +86,7 @@ select:focus-visible {
   isolation: isolate;
   background: #193b32;
   color: #f6f7ee;
+  animation: soft-enter 360ms 50ms ease-out both;
 }
 
 .login-side::before {
@@ -159,11 +161,13 @@ select:focus-visible {
   min-height: 43px;
   color: #d3ded5;
   border-radius: 8px;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
 }
 
 .nav-item:hover {
   background: #ffffff12;
   color: #fff;
+  transform: translateX(2px);
 }
 
 .nav-item.active {
@@ -227,6 +231,7 @@ select:focus-visible {
 
 .page-heading {
   margin-bottom: 28px;
+  animation: soft-enter 220ms ease-out both;
 }
 
 .eyebrow {
@@ -258,6 +263,21 @@ select:focus-visible {
 .stat-card {
   min-height: 155px;
   padding: 21px 22px;
+  transition: transform .16s ease, box-shadow .16s ease;
+  animation: soft-enter 240ms ease-out both;
+}
+
+.stat-card:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.stat-card:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 14px #20352b10, 0 14px 28px #20352b08;
 }
 
 .stat-card::after {
@@ -289,6 +309,10 @@ select:focus-visible {
 
 .section-card {
   padding: 23px;
+}
+
+.page-content > :not(.page-heading) {
+  animation: soft-enter 250ms 35ms ease-out both;
 }
 
 .card-heading h2 {
@@ -589,6 +613,18 @@ select:focus-visible {
   display: none !important;
 }
 
+@keyframes soft-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 1050px) {
   .management-layout {
     grid-template-columns: 1fr;
@@ -695,6 +731,17 @@ select:focus-visible {
 
   .card-heading .search-field {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
   }
 }
 
