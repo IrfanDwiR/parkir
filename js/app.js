@@ -9,8 +9,18 @@ import {
   registerEntry,
   updateParkingSettings
 } from './parking.js';
+import {
+  getActivityLogs,
+  getDemoUsers,
+  logActivity,
+  removeDemoUser,
+  saveDemoUser,
+  syncDemoUser
+} from './management.js';
 
 const app = document.querySelector('#app');
+let reportRange = { from: '', to: '' };
+let activityQuery = '';
 
 const menus = {
   admin: [
@@ -55,7 +65,7 @@ function renderLogin() {
           <label class="field-label" for="password">Password</label>
           <input class="field-input" id="password" name="password" type="password" placeholder="Masukkan password" autocomplete="current-password" required>
           <div class="demo-role-wrap" id="demoRoleWrap">
-            <label class="field-label" for="demoRole">Parkir praktis tinggal buka aplikasi</label>
+            <label class="field-label" for="demoRole">Masuk sebagai (mode demo)</label>
             <select class="field-input" id="demoRole"><option value="admin">Admin</option><option value="petugas">Petugas</option><option value="owner">Owner</option></select>
           </div>
           <p class="form-error" id="loginError" role="alert"></p>
@@ -75,11 +85,13 @@ function renderLogin() {
     button.innerHTML = 'Memproses...';
     error.textContent = '';
     try {
-      await login(
+      const session = await login(
         document.querySelector('#username').value,
         document.querySelector('#password').value,
         document.querySelector('#demoRole').value
       );
+      syncDemoUser(session.user);
+      logActivity('Masuk ke sistem', session.user);
       location.hash = '#/dashboard';
     } catch (err) {
       error.textContent = err.message;
@@ -94,6 +106,10 @@ function renderDashboard(route) {
   const session = getSession();
   const role = String(session.user?.role || 'admin').toLowerCase();
   const roleMenus = menus[role] || menus.admin;
+  if (route !== '#/dashboard' && !roleMenus.some(item => item.route === route)) {
+    location.hash = '#/dashboard';
+    return;
+  }
   const pageKey = route.replace('#/', '') || 'dashboard';
   const [pageTitle, pageDescription] = pageDescriptions[pageKey] || pageDescriptions.dashboard;
   const activeMenu = roleMenus.some(item => item.route === route) ? route : '#/dashboard';
@@ -120,10 +136,15 @@ function renderDashboard(route) {
         </section>
       </main>
     </div>`;
-  document.querySelector('#logoutButton').addEventListener('click', logout);
+  document.querySelector('#logoutButton').addEventListener('click', () => {
+    recordActivity('Keluar dari sistem');
+    logout();
+  });
 }
 
 function renderPage(pageKey, title, description, role) {
+  if (pageKey === 'users' && role === 'admin') return usersContent();
+  if (pageKey === 'log-aktivitas' && role === 'admin') return activityContent();
   if (pageKey === 'parkir-masuk' && role === 'petugas') return entryContent();
   if (pageKey === 'parkir-keluar' && role === 'petugas') return exitContent();
   if (pageKey === 'tarif-area' && role === 'admin') return settingsContent();
@@ -134,6 +155,8 @@ function renderPage(pageKey, title, description, role) {
 
 function dashboardContent(role) {
   const data = getParkingData();
+  const users = getDemoUsers();
+  const activities = getActivityLogs();
   const today = new Date().toDateString();
   const todayTransactions = data.transactions.filter(item => new Date(item.exitedAt).toDateString() === today);
   const todayEntries = data.active.filter(item => new Date(item.enteredAt).toDateString() === today).length +
@@ -146,7 +169,7 @@ function dashboardContent(role) {
     <div class="stats-grid"><article class="stat-card"><span class="stat-icon">▤</span><p>Transaksi Hari Ini</p><strong>${todayTransactions.length}</strong></article><article class="stat-card"><span class="stat-icon">Rp</span><p>Pendapatan Hari Ini</p><strong>${formatRupiah(todayTransactions.reduce((sum, item) => sum + item.amount, 0))}</strong></article><article class="stat-card"><span class="stat-icon">◷</span><p>Kendaraan di Area</p><strong>${occupied}</strong></article></div>
     <div class="section-card"><div class="card-heading"><div><h2>Informasi Laporan</h2><p>Pantau ringkasan transaksi dan pendapatan parkir.</p></div><a class="text-link" href="#/rekap">Lihat rekap →</a></div>${recentTransactions(data.transactions, 5)}</div>`;
   return `
-    <div class="stats-grid"><article class="stat-card"><span class="stat-icon">♙</span><p>Total Pengguna</p><strong>—</strong><small>Menunggu integrasi data</small></article><article class="stat-card"><span class="stat-icon">▣</span><p>Data Kendaraan</p><strong>—</strong><small>Menunggu integrasi data</small></article><article class="stat-card"><span class="stat-icon">◷</span><p>Log Aktivitas</p><strong>—</strong><small>Menunggu integrasi data</small></article></div>
+    <div class="stats-grid"><article class="stat-card"><span class="stat-icon">♙</span><p>Pengguna Demo</p><strong>${users.length}</strong><small>Terdaftar di browser ini</small></article><article class="stat-card"><span class="stat-icon">▣</span><p>Kendaraan Aktif</p><strong>${data.active.length}</strong><small>${data.transactions.length} transaksi selesai</small></article><article class="stat-card"><span class="stat-icon">◷</span><p>Aktivitas Tercatat</p><strong>${activities.length}</strong><small>Maksimal 250 aktivitas</small></article></div>
     <div class="section-card"><div class="card-heading"><div><h2>Ringkasan Sistem</h2><p>Kelola data utama aplikasi parkir dari dashboard admin.</p></div></div><div class="quick-actions"><a href="#/users" class="action-card"><span>♙</span><div><strong>Manajemen User</strong><small>Kelola akun pengguna</small></div><b>→</b></a><a href="#/tarif-area" class="action-card"><span>▤</span><div><strong>Tarif & Area Parkir</strong><small>Atur tarif dan area parkir</small></div><b>→</b></a></div></div>`;
 }
 
@@ -190,10 +213,78 @@ function vehiclesContent() {
   return `<div class="section-card"><div class="card-heading"><div><h2>Kendaraan aktif</h2><p>Daftar kendaraan yang sedang berada di area parkir.</p></div></div>${activeVehiclesTable(data.active)}</div>${recentTransactions(data.transactions, 10, 'Riwayat kendaraan keluar')}`;
 }
 
+function usersContent() {
+  const users = getDemoUsers();
+  const currentUsername = getSession()?.user?.username || '';
+  return `<div class="notice-card"><strong>Mode demo</strong><span>Daftar ini disimpan di browser ini. Login demo masih bebas dan belum memakai akun di tabel ini sebagai autentikasi.</span></div>
+    <div class="management-layout"><form class="section-card workflow-form" id="userForm">
+      <div class="card-heading"><div><h2 id="userFormTitle">Tambah pengguna</h2><p>Catat profil dan role pengguna demo.</p></div></div>
+      <input type="hidden" name="userId" value="">
+      <label class="field-label" for="userName">Nama lengkap</label><input class="field-input" id="userName" name="name" maxlength="60" placeholder="Contoh: Dung Pratama" required>
+      <label class="field-label" for="userUsername">Username</label><input class="field-input" id="userUsername" name="username" maxlength="30" placeholder="Contoh: dung.petugas" required>
+      <label class="field-label" for="userRole">Role</label><select class="field-input" id="userRole" name="role"><option value="petugas">Petugas</option><option value="admin">Admin</option><option value="owner">Owner</option></select>
+      <div class="form-error" id="userError" role="alert"></div><div class="success-message" id="userSuccess" role="status"></div>
+      <div class="form-actions"><button class="primary-button" type="submit" id="userSubmit">Tambah pengguna <span>→</span></button><button class="secondary-button hidden" type="button" id="cancelUserEdit">Batal edit</button></div>
+    </form>
+    <section class="section-card user-list-card"><div class="card-heading"><div><h2>Daftar pengguna</h2><p>${users.length} profil demo tersimpan.</p></div></div>
+      ${users.length ? `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Terdaftar</th><th>Aksi</th></tr></thead><tbody>${users.map(user => `<tr><td>${escapeHTML(user.name)}</td><td>${escapeHTML(user.username)}</td><td><span class="role-badge ${escapeHTML(user.role)}">${escapeHTML(roleLabel(user.role))}</span></td><td>${formatDate(user.createdAt)}</td><td><div class="table-actions"><button class="small-button" type="button" data-edit-user="${escapeHTML(user.id)}">Edit</button><button class="small-button danger-button" type="button" data-delete-user="${escapeHTML(user.id)}" ${user.username.toLowerCase() === currentUsername.toLowerCase() ? 'disabled title="Akun yang sedang digunakan tidak bisa dihapus"' : ''}>Hapus</button></div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state">Belum ada profil pengguna. Profil demo akan tercatat setelah login.</div>'}
+    </section></div>`;
+}
+
+function activityContent() {
+  const logs = getActivityLogs();
+  const filtered = logs.filter(item =>
+    `${item.action} ${item.username} ${roleLabel(item.role)}`.toLowerCase().includes(activityQuery.toLowerCase())
+  );
+  return `<section class="section-card"><div class="card-heading"><div><h2>Jejak aktivitas</h2><p>${filtered.length} dari ${logs.length} aktivitas terakhir.</p></div><label class="search-field"><span>⌕</span><input id="activitySearch" value="${escapeHTML(activityQuery)}" placeholder="Cari aktivitas atau pengguna" aria-label="Cari aktivitas"></label></div>
+    <div class="notice-card compact-notice"><strong>Catatan demo</strong><span>Log tersimpan lokal di browser ini dan dibatasi hingga 250 aktivitas.</span></div>
+    ${filtered.length ? `<div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Pengguna</th><th>Role</th><th>Aktivitas</th></tr></thead><tbody>${filtered.map(item => `<tr><td>${formatDate(item.createdAt)}</td><td>${escapeHTML(item.username)}</td><td>${escapeHTML(roleLabel(item.role))}</td><td>${escapeHTML(item.action)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state">Belum ada aktivitas yang cocok.</div>'}
+  </section>`;
+}
+
 function reportsContent() {
   const data = getParkingData();
-  const transactions = data.transactions;
-  return `<div class="stats-grid"><article class="stat-card"><span class="stat-icon">▤</span><p>Total Transaksi</p><strong>${transactions.length}</strong></article><article class="stat-card"><span class="stat-icon">Rp</span><p>Total Pendapatan</p><strong>${formatRupiah(transactions.reduce((sum, item) => sum + item.amount, 0))}</strong></article><article class="stat-card"><span class="stat-icon">▣</span><p>Kendaraan Aktif</p><strong>${data.active.length}</strong></article></div>${recentTransactions(transactions, 20, 'Riwayat transaksi')}`;
+  const transactions = filterTransactions(data.transactions, reportRange);
+  const revenue = transactions.reduce((sum, item) => sum + item.amount, 0);
+  return `<div class="report-filter-wrap"><form class="section-card report-filter" id="reportFilterForm"><div class="filter-fields"><label class="field-label">Dari tanggal<input class="field-input" name="from" type="date" value="${reportRange.from}"></label><label class="field-label">Sampai tanggal<input class="field-input" name="to" type="date" value="${reportRange.to}"></label></div><div class="filter-actions"><button class="secondary-button" type="button" id="clearReportFilter">Reset</button><button class="primary-button" type="submit">Terapkan filter <span>→</span></button><button class="secondary-button" type="button" id="exportCsvButton">Unduh CSV ↓</button></div></form><div class="form-error report-error" id="reportError" role="alert"></div></div>
+    <div class="stats-grid"><article class="stat-card"><span class="stat-icon">▤</span><p>Transaksi pada periode</p><strong>${transactions.length}</strong></article><article class="stat-card"><span class="stat-icon">Rp</span><p>Pendapatan pada periode</p><strong>${formatRupiah(revenue)}</strong></article><article class="stat-card"><span class="stat-icon">▣</span><p>Kendaraan Aktif</p><strong>${data.active.length}</strong></article></div>${recentTransactions(transactions, transactions.length, 'Riwayat transaksi')}`;
+}
+
+function filterTransactions(transactions, range) {
+  return transactions.filter(item => {
+    const date = localDateValue(item.exitedAt);
+    return (!range.from || date >= range.from) && (!range.to || date <= range.to);
+  });
+}
+
+function localDateValue(value) {
+  const date = new Date(value);
+  const pad = number => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function csvCell(value) {
+  let text = String(value ?? '');
+  if (/^[\t\r\n ]*[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function exportTransactionsCsv() {
+  const transactions = filterTransactions(getParkingData().transactions, reportRange);
+  const rows = [
+    ['Nomor karcis', 'Nomor kendaraan', 'Jenis', 'Waktu masuk', 'Waktu keluar', 'Durasi (jam)', 'Biaya (Rp)', 'Pembayaran'],
+    ...transactions.map(item => [
+      item.ticket, item.plate, item.type === 'motor' ? 'Motor' : 'Mobil',
+      formatDate(item.enteredAt), formatDate(item.exitedAt), item.hours, item.amount, item.paymentMethod
+    ])
+  ];
+  const blob = new Blob([`\uFEFF${rows.map(row => row.map(csvCell).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `parkirku-${reportRange.from || 'semua'}-${reportRange.to || 'data'}.csv`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function activeVehiclesTable(vehicles) {
@@ -223,7 +314,34 @@ function placeholderContent(title, description, role) {
 }
 
 function roleLabel(role) {
-  return ({ admin: 'Administrator', petugas: 'Petugas Parkir', owner: 'Owner' })[role] || 'Pengguna';
+  return ({ admin: 'Administrator', petugas: 'Petugas Parkir', owner: 'Owner', sistem: 'Sistem' })[role] || 'Pengguna';
+}
+
+function recordActivity(action) {
+  const user = getSession()?.user;
+  logActivity(action, {
+    username: user?.username,
+    role: String(user?.role || '').toLowerCase()
+  });
+}
+
+function printTicketMarkup(vehicle, transaction = null) {
+  const title = transaction ? 'STRUK PARKIR' : 'KARCIS PARKIR';
+  const rows = [
+    ['Nomor karcis', vehicle.ticket],
+    ['Nomor kendaraan', vehicle.plate],
+    ['Jenis kendaraan', vehicle.type === 'motor' ? 'Motor' : 'Mobil'],
+    ['Slot parkir', vehicle.slot],
+    ['Waktu masuk', formatDate(vehicle.enteredAt)],
+    ...(transaction ? [
+      ['Waktu keluar', formatDate(transaction.exitedAt)],
+      ['Durasi', `${transaction.hours} jam`],
+      ['Pembayaran', transaction.paymentMethod],
+      ['Total', formatRupiah(transaction.amount)]
+    ] : [])
+  ];
+  const note = transaction ? 'Terima kasih, hati-hati di jalan.' : 'Simpan karcis ini sampai kendaraan keluar.';
+  return `<div class="ticket-result ticket-print"><div class="ticket-brand">parkir<span>ku.</span></div><p class="ticket-kicker">${title}</p><div class="ticket-rule"></div>${rows.map(([label, value]) => `<div class="ticket-line"><span>${label}</span><strong>${escapeHTML(value)}</strong></div>`).join('')}<p class="ticket-thanks">${note}</p><button class="secondary-button print-trigger" type="button" data-print-trigger>Cetak ${transaction ? 'struk' : 'karcis'} ↗</button></div>`;
 }
 
 function escapeHTML(value) {
@@ -246,7 +364,8 @@ document.addEventListener('submit', event => {
     result.innerHTML = '';
     try {
       const vehicle = registerEntry(event.target.elements.namedItem('plate').value, event.target.elements.namedItem('type').value);
-      const ticketMarkup = `<div class="ticket-result"><strong>Karcis berhasil dibuat</strong><span>Nomor karcis <b>${escapeHTML(vehicle.ticket)}</b></span><span>Kendaraan ${escapeHTML(vehicle.plate)} · Slot ${escapeHTML(vehicle.slot)}</span><span>Waktu masuk ${formatDate(vehicle.enteredAt)}</span></div>`;
+      recordActivity(`Mencatat kendaraan masuk ${vehicle.plate} (${vehicle.ticket})`);
+      const ticketMarkup = printTicketMarkup(vehicle);
       render();
       document.querySelector('#entryResult').innerHTML = ticketMarkup;
     } catch (err) {
@@ -269,7 +388,8 @@ document.addEventListener('submit', event => {
       paymentEvent.preventDefault();
       try {
         const transaction = completeExit(vehicle.ticket, document.querySelector('#paymentMethod').value);
-        const receiptMarkup = `<div class="ticket-result"><strong>Transaksi selesai</strong><span>${escapeHTML(transaction.plate)} · ${escapeHTML(transaction.ticket)}</span><span>Total dibayar ${formatRupiah(transaction.amount)} melalui ${escapeHTML(transaction.paymentMethod)}.</span><span>Slot ${escapeHTML(transaction.slot)} sekarang tersedia.</span></div>`;
+        recordActivity(`Menyelesaikan transaksi ${transaction.plate} sebesar ${formatRupiah(transaction.amount)}`);
+        const receiptMarkup = `<div class="ticket-result transaction-success"><strong>Transaksi selesai</strong><span>${escapeHTML(transaction.plate)} · ${escapeHTML(transaction.ticket)}</span><span>Total dibayar ${formatRupiah(transaction.amount)} melalui ${escapeHTML(transaction.paymentMethod)}.</span><span>Slot ${escapeHTML(transaction.slot)} sekarang tersedia.</span></div>${printTicketMarkup(transaction, transaction)}`;
         render();
         document.querySelector('#exitResult').innerHTML = receiptMarkup;
       } catch (err) {
@@ -287,10 +407,111 @@ document.addEventListener('submit', event => {
         { motor: Number(event.target.elements.namedItem('motorRate').value), mobil: Number(event.target.elements.namedItem('carRate').value) },
         { motor: Number(event.target.elements.namedItem('motorCapacity').value), mobil: Number(event.target.elements.namedItem('carCapacity').value) }
       );
+      recordActivity('Memperbarui tarif dan kapasitas slot parkir');
       success.textContent = 'Pengaturan tarif dan kapasitas berhasil disimpan.';
     } catch (err) {
       error.textContent = err.message;
     }
+  }
+});
+
+document.addEventListener('submit', event => {
+  if (event.target.id === 'userForm') {
+    event.preventDefault();
+    const form = event.target;
+    const error = document.querySelector('#userError');
+    error.textContent = '';
+    try {
+      const isEditing = Boolean(form.elements.namedItem('userId').value);
+      const user = saveDemoUser({
+        id: form.elements.namedItem('userId').value,
+        name: form.elements.namedItem('name').value,
+        username: form.elements.namedItem('username').value,
+        role: form.elements.namedItem('role').value
+      });
+      recordActivity(`${isEditing ? 'Memperbarui' : 'Menambahkan'} pengguna ${user.username} (${roleLabel(user.role)})`);
+      render();
+      document.querySelector('#userSuccess').textContent = `Profil ${user.username} berhasil ${isEditing ? 'diperbarui' : 'ditambahkan'}.`;
+    } catch (err) {
+      error.textContent = err.message;
+    }
+  } else if (event.target.id === 'reportFilterForm') {
+    event.preventDefault();
+    const from = event.target.elements.namedItem('from').value;
+    const to = event.target.elements.namedItem('to').value;
+    if (from && to && from > to) {
+      document.querySelector('#reportError').textContent = 'Tanggal awal tidak boleh melewati tanggal akhir.';
+      return;
+    }
+    reportRange = { from, to };
+    render();
+  }
+});
+
+document.addEventListener('click', event => {
+  const editButton = event.target.closest('[data-edit-user]');
+  if (editButton) {
+    const user = getDemoUsers().find(item => item.id === editButton.dataset.editUser);
+    if (!user) return;
+    const form = document.querySelector('#userForm');
+    form.elements.namedItem('userId').value = user.id;
+    form.elements.namedItem('name').value = user.name;
+    form.elements.namedItem('username').value = user.username;
+    form.elements.namedItem('role').value = user.role;
+    document.querySelector('#userFormTitle').textContent = 'Edit pengguna';
+    document.querySelector('#userSubmit').innerHTML = 'Simpan perubahan <span>→</span>';
+    document.querySelector('#cancelUserEdit').classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    form.elements.namedItem('name').focus();
+    return;
+  }
+
+  const deleteButton = event.target.closest('[data-delete-user]');
+  if (deleteButton) {
+    const currentUsername = getSession()?.user?.username || '';
+    try {
+      if (!window.confirm('Hapus profil demo ini?')) return;
+      const user = removeDemoUser(deleteButton.dataset.deleteUser, currentUsername);
+      recordActivity(`Menghapus pengguna ${user.username}`);
+      render();
+    } catch (err) {
+      const error = document.querySelector('#userError');
+      if (error) error.textContent = err.message;
+    }
+    return;
+  }
+
+  if (event.target.closest('#cancelUserEdit')) {
+    render();
+    return;
+  }
+
+  if (event.target.closest('#clearReportFilter')) {
+    reportRange = { from: '', to: '' };
+    render();
+    return;
+  }
+
+  if (event.target.closest('#exportCsvButton')) {
+    exportTransactionsCsv();
+    return;
+  }
+
+  if (event.target.closest('[data-print-trigger]')) {
+    document.body.classList.add('print-ticket-mode');
+    window.addEventListener('afterprint', () => document.body.classList.remove('print-ticket-mode'), { once: true });
+    window.print();
+  }
+});
+
+document.addEventListener('input', event => {
+  if (event.target.id === 'activitySearch') {
+    const cursor = event.target.selectionStart;
+    activityQuery = event.target.value;
+    render();
+    const search = document.querySelector('#activitySearch');
+    search.focus();
+    search.setSelectionRange(cursor, cursor);
   }
 });
 

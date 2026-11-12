@@ -1,4 +1,4 @@
-# ParkirKu — Frontend Sprint 1
+# ParkirKu — Demo Web Parkir
 
 Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules). Tampilan mengikuti activity diagram dengan tiga role pengguna: Admin, Petugas, dan Owner. Customer tidak perlu login karena alurnya dilayani petugas.
 
@@ -9,19 +9,21 @@ Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules
 4. Tekan `Ctrl+C` di terminal untuk menghentikan server.
 5. Login demo dengan username dan password bebas, lalu pilih role Admin, Petugas, atau Owner.
 
-## Isi Sprint 1
-- Struktur folder dan JavaScript module.
-- Halaman login.
-- Demo login dan penyimpanan session di localStorage.
-- Proteksi route sederhana.
-- Dashboard dan menu berbeda sesuai role.
-- Tombol logout.
+## Fitur yang tersedia
+- Login demo dengan menu berbeda untuk Admin, Petugas, dan Owner.
+- Dashboard ringkas sesuai role.
+- Pengaturan tarif/kapasitas dan pencatatan parkir masuk/keluar.
+- Manajemen profil demo, log aktivitas, rekap transaksi, dan ekspor laporan CSV.
+- Cetak karcis serta struk pembayaran.
 
 ## Alur demo parkir
 - Login sebagai Petugas untuk mencatat kendaraan masuk, membuat nomor karcis, mencari karcis, melihat biaya, dan mengonfirmasi pembayaran tunai atau QRIS.
 - Login sebagai Admin untuk mengatur tarif per jam dan kapasitas slot, serta melihat kendaraan aktif dan riwayat kendaraan keluar.
-- Login sebagai Owner untuk melihat rekap transaksi dan pendapatan.
+- Admin juga dapat mengelola profil demo dan memantau log aktivitas.
+- Login sebagai Owner untuk melihat rekap transaksi, memfilter periode, dan mengunduh CSV.
+- Petugas dapat mencetak karcis saat kendaraan masuk dan struk setelah transaksi keluar.
 - Data demo disimpan di `localStorage` browser, jadi tersedia kembali saat halaman dibuka di browser yang sama. Data belum dibagikan antarperangkat dan tidak menggantikan database backend.
+- Manajemen pengguna dan pilihan role login tetap berupa simulasi demo; daftar pengguna tidak mengautentikasi login.
 - Tarif awal demo: motor Rp2.000/jam dan mobil Rp5.000/jam. Durasi dibulatkan ke atas dengan minimum satu jam; tarif dapat diubah dari menu Tarif & Area Parkir.
 
 ## Catatan integrasi backend
@@ -36,5 +38,8 @@ Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules
 - `css/style.css` — desain dan responsive layout.
 - `js/config.js` — URL API dan mode demo.
 - `js/auth.js` — login, session, dan logout.
+- `js/management.js` — daftar pengguna demo dan log aktivitas.
 - `js/router.js` — pengaturan route dan proteksi halaman.
-- `js/app.js` — halaman login, dashboard, navigasi, dan placeholder halaman.
+- `js/app.js` — halaman login, dashboard, navigasi, laporan, dan alur transaksi.
+- `css/theme.css` — tema visual ParkirKu.
+- `server.js` — server lokal untuk perintah `npm start`.
