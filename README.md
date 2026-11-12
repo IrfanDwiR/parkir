@@ -1,11 +1,11 @@
 # ParkirKu — Demo Web Parkir
 
-Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules). Tampilan mengikuti activity diagram dengan tiga role pengguna: Admin, Petugas, dan Owner. Customer tidak perlu login karena alurnya dilayani petugas.
+Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules), disimpan di folder `frontend/`. Backend temanmu nanti bisa ditambahkan terpisah di root repo atau folder `backend/`. Customer tidak perlu login karena alurnya dilayani petugas.
 
 ## Menjalankan project
 1. Pastikan Node.js dan npm sudah terpasang.
-2. Buka folder project ini di terminal.
-3. Jalankan `npm start`; server lokal akan hidup dan browser terbuka otomatis di `http://127.0.0.1:5500/`.
+2. Dari root repo, jalankan `npm --prefix .\frontend start` (atau masuk ke `frontend/` dan jalankan `npm start`).
+3. Server lokal akan hidup dan browser terbuka otomatis di `http://127.0.0.1:5500/`.
 4. Tekan `Ctrl+C` di terminal untuk menghentikan server.
 5. Login demo dengan username dan password bebas, lalu pilih role Admin, Petugas, atau Owner.
 
@@ -27,19 +27,16 @@ Frontend aplikasi parkir menggunakan HTML, CSS, dan JavaScript murni (ES Modules
 - Tarif awal demo: motor Rp2.000/jam dan mobil Rp5.000/jam. Durasi dibulatkan ke atas dengan minimum satu jam; tarif dapat diubah dari menu Tarif & Area Parkir.
 
 ## Catatan integrasi backend
-- Mode demo diatur melalui `DEMO_MODE` pada `js/config.js`.
+- Mode demo diatur melalui `DEMO_MODE` pada `frontend/js/config.js`.
 - Login demo belum memakai database dan bukan autentikasi sungguhan.
 - Setelah API backend siap, ubah `DEMO_MODE` menjadi `false`.
 - Cocokkan `API_BASE_URL`, endpoint `/api/login`, bentuk request `{ username, password }`, dan respons `{ token, user }` dengan backend temanmu.
 - Struktur `user` minimal perlu memiliki `username` dan `role` (`admin`, `petugas`, atau `owner`).
 
 ## Struktur folder
-- `index.html` — halaman utama.
-- `css/style.css` — desain dan responsive layout.
-- `js/config.js` — URL API dan mode demo.
-- `js/auth.js` — login, session, dan logout.
-- `js/management.js` — daftar pengguna demo dan log aktivitas.
-- `js/router.js` — pengaturan route dan proteksi halaman.
-- `js/app.js` — halaman login, dashboard, navigasi, laporan, dan alur transaksi.
-- `css/theme.css` — tema visual ParkirKu.
-- `server.js` — server lokal untuk perintah `npm start`.
+- `frontend/index.html` — halaman utama.
+- `frontend/css/` — desain dan responsive layout.
+- `frontend/js/` — aplikasi, konfigurasi, autentikasi demo, dan data demo.
+- `frontend/package.json` — perintah `npm start`.
+- `frontend/server.js` — server lokal untuk frontend.
+- Backend belum ada di repo ini; tambahkan nanti sebagai bagian terpisah.
